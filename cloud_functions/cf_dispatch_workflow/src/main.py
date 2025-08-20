@@ -134,7 +134,7 @@ if __name__ == '__main__':
     mock_event = {
         'data': 'store'.encode('utf-8'),
         'attributes': {
-            'bucket': f'{project_id}-magasin-cie-landing',
+            'bucket': f'{project_id}_magasin_cie_landing',
             'file_path': os.path.join('input', 'store_20220531.csv'),
         }
     }

@@ -7,7 +7,7 @@ terraform {
     }
   }
   backend "gcs" {
-    bucket = "${var.project_id}-gcs-tfstate-sbx"
+    bucket = "vast-verve-469412-c5-gcs-tfstate-sbx"
     prefix = "terraform-states"
   }
 }

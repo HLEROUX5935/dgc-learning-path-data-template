@@ -1,2 +1,10 @@
 .DS_Store
 __pycache__
+
+__materials__/data/init - Copie/
+a_lire.txt
+cloud_functions/cf_trigger_on_file/src/function.zip
+cloud_functions/cf_trigger_on_file/src/venv/
+iac/.terraform.lock.hcl
+iac/.terraform/
+iac/init/backend.tfvars

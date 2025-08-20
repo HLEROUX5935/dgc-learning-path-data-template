@@ -1,5 +1,7 @@
+#import re
+from datetime import datetime
 import os
-import datetime
+#import datetime
 from google.cloud import storage
 from google.cloud import pubsub_v1
 
@@ -13,6 +15,40 @@ FILES_AND_EXTENSION_SPEC = {
     'customer': 'csv',
     'basket': 'json'
 }
+
+def verifier_nom_fichier(nom_fichier):
+    # Séparer le nom et l'extension
+    if '.' not in nom_fichier:
+        return False, "Le nom du fichier doit contenir une extension." ,"",""
+
+    nom_sans_extension, extension = nom_fichier.rsplit('.', 1)
+
+    # Vérifier que le nom comporte 2 parties séparées par _
+    parties = nom_sans_extension.split('_')
+    if len(parties) != 2:
+        return False, "Le nom du fichier doit comporter exactement 2 parties séparées par '_'." ,"",""
+
+    prefixe, date_str = parties
+
+    # Vérifier que le préfixe est dans FILES_AND_EXTENSION_SPEC
+    if prefixe not in FILES_AND_EXTENSION_SPEC:
+        prefixes_autorises = list(FILES_AND_EXTENSION_SPEC.keys())
+        return False, f"La première partie '{prefixe}' n'est pas autorisée. Les valeurs autorisées sont : {', '.join(prefixes_autorises)}." ,"",""
+
+    # Vérifier que l'extension correspond à celle attendue pour le préfixe
+    extension_attendue = FILES_AND_EXTENSION_SPEC[prefixe]
+    if extension != extension_attendue:
+        return False, f"L'extension '{extension}' ne correspond pas à l'extension attendue '{extension_attendue}' pour le préfixe '{prefixe}'." ,"",""
+
+    # Vérifier que la deuxième partie est une date au format YYYYMMDD
+    try:
+        date = datetime.strptime(date_str, '%Y%m%d')
+    except ValueError:
+        return False, f"La deuxième partie '{date_str}' n'est pas une date valide au format YYYYMMDD." ,"",""
+
+    # Si toutes les vérifications sont passées
+    return True, "Le nom du fichier est valide.", parties[0] ,parties[1]
+
 
 
 def check_file_format(event: dict, context: dict):
@@ -60,9 +96,14 @@ def check_file_format(event: dict, context: dict):
         #     - the second part is required to be a 'YYYYMMDD'-formatted date 
         #     - required to have the expected extension
 
-        ...
+        valide, message, part_one ,part_two = verifier_nom_fichier(file)
+        #print(f"{part_one}: {message}")
+        if not valide:
+            print(f"{part_one}: {message}")
+            return
+            raise Exception(message)
 
-        table_name = "<to_replace_with_your_first_file_part_variable>"
+        table_name = part_one
 
         # if all checks are succesful then publish it to the PubSub topic
         publish_to_pubsub(
@@ -91,14 +132,22 @@ def publish_to_pubsub(data: bytes, attributes: dict):
     ## remove this part when you are ready to deploy your Cloud Function. 
     ## [start simulation]
     print('Your file is considered as valid. It will be published to Pubsub.')
-    return
+    print(f'     data: {data}')
+    print(f'     attributes: {attributes}')
+    #return
     ## [end simulation]
 
 
     # retrieve the GCP_PROJECT from the reserved environment variables
     # more: https://cloud.google.com/functions/docs/configuring/env-var#python_37_and_go_111
-    project_id = os.environ['GCP_PROJECT']
+    import os
+
+    project_id = os.environ.get('GCP_PROJECT')
+    if project_id is None:
+        raise ValueError("La variable d'environnement 'GCP_PROJECT' n'est pas définie.")
+    print(f'     project_id: {project_id}')
     topic_id = os.environ['pubsub_topic_id']
+    print(f'     topic_id: {topic_id}')
     
     # connect to the PubSub client
     publisher = pubsub_v1.PublisherClient()
@@ -123,10 +172,11 @@ def move_to_invalid_file_folder(bucket_name: str, blob_path: str):
     ## remove this part when you are ready to deploy your Cloud Function. 
     ## [start simulation]
     print('Your file is considered as invalid. It will be moved to invalid/.')
-    return
+    print(f'     bucket_name: {bucket_name}')
+    print(f'     blob_path: {blob_path}')
+    #return
     ## [end simulation]
-    
-    
+        
     # connect to the Cloud Storage client
     storage_client = storage.Client()
 
@@ -134,9 +184,13 @@ def move_to_invalid_file_folder(bucket_name: str, blob_path: str):
     bucket = storage_client.bucket(bucket_name)
     blob = bucket.blob(blob_path)
     new_blob_path = blob_path.replace('input', 'invalid')
-    bucket.rename_blob(blob, new_blob_path)
+    try:
+        bucket.rename_blob(blob, new_blob_path)
+        print(f'{blob.name} moved to {new_blob_path}')
+    except Exception as e:
+            print(e)
+            # the file is moved to the invalid/ folder if one check is failed
 
-    print(f'{blob.name} moved to {new_blob_path}')
 
 
 if __name__ == '__main__':
@@ -145,7 +199,7 @@ if __name__ == '__main__':
     # it will have no impact on the Cloud Function when deployed.
     import os
     
-    project_id = '<YOUR-PROJECT-ID>'
+    project_id = 'vast-verve-469412-c5'
 
     realpath = os.path.realpath(__file__)
     material_path = os.sep.join(['', *realpath.split(os.sep)[:-4], '__materials__'])
@@ -155,7 +209,7 @@ if __name__ == '__main__':
     for file_name in os.listdir(init_files_path):
         print(f'\nTesting your file {file_name}')
         mock_event = {
-            'bucket': f'{project_id}-magasin-cie-landing',
+            'bucket': f'{project_id}_magasin_cie_landing',
             'name': os.path.join('input', file_name)
         }
 
