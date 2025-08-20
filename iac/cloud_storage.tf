@@ -45,6 +45,7 @@ resource "google_storage_bucket" "magasin_cie_utils" {
   location = var.location
 }
 
+
 resource "google_storage_bucket" "cloud_functions_sources" {
   project                     = var.project_id
   name                        = "${var.project_id}_cloud_functions_sources"
@@ -52,3 +53,23 @@ resource "google_storage_bucket" "cloud_functions_sources" {
   force_destroy               = true
   uniform_bucket_level_access = true
 }
+
+resource "google_storage_bucket_object" "cleaned_store_sql" {
+  bucket   = google_storage_bucket.magasin_cie_utils.name
+  name = "cleaned_store.sql"
+  source = var.cleaned_store_sql
+}
+
+resource "google_storage_bucket_object" "raw_store_json" {
+  bucket   = google_storage_bucket.magasin_cie_utils.name
+  name = "raw_store_json"
+  source = var.raw_store_json
+}
+
+resource "google_storage_bucket_object" "cleaned_store_json" {
+  bucket   = google_storage_bucket.magasin_cie_utils.name
+  name = "cleaned_store_json"
+  source = var.cleaned_store_json
+}
+
+

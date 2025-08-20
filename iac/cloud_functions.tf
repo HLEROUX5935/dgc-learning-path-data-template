@@ -1,8 +1,15 @@
 # Generates an archive of the source code compressed as a .zip file.
-data "archive_file" "source"{
-    type        = "zip"
-    source_dir  = "../cloud_functions/cf_trigger_on_file/src"
-    output_path = "../cloud_functions/cf_trigger_on_file/src/function.zip"
+
+resource "null_resource" "filter_dir" {
+  provisioner "local-exec" {
+    command = "bash ../cloud_functions/cf_trigger_on_file/filter_dir.sh"
+  }
+}
+
+data "archive_file" "source" {
+  type        = "zip"
+  source_dir  = "../cloud_functions/cf_trigger_on_file/src_filtered"
+  output_path = "../cloud_functions/cf_trigger_on_file/src/function.zip"
 }
 
 # Add source code zip to the Cloud Function's bucket

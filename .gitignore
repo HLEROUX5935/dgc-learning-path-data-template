@@ -8,3 +8,4 @@ cloud_functions/cf_trigger_on_file/src/venv/
 iac/.terraform.lock.hcl
 iac/.terraform/
 iac/init/backend.tfvars
+**/src_filtered/
