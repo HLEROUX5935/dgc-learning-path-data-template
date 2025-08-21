@@ -65,7 +65,7 @@ def check_file_format(event: dict, context: dict):
 
     # rename the variable to be more specific and write it to the logs
     blob_event = event
-    print(f'Processing blob: {blob_event["name"]}.')
+    print(f'     ***************                 Start Processing blob: {blob_event["name"]}.')
 
     # get the bucket name and the blob path
     bucket_name = blob_event['bucket']
@@ -119,6 +119,9 @@ def check_file_format(event: dict, context: dict):
         # the file is moved to the invalid/ folder if one check is failed
         move_to_invalid_file_folder(bucket_name, blob_path)
 
+    print(f'     ***************                 End   Processing blob: {blob_event["name"]}.')    
+
+
 
 def publish_to_pubsub(data: bytes, attributes: dict):
     """
@@ -132,8 +135,8 @@ def publish_to_pubsub(data: bytes, attributes: dict):
     ## remove this part when you are ready to deploy your Cloud Function. 
     ## [start simulation]
     print('Your file is considered as valid. It will be published to Pubsub.')
-    print(f'     data: {data}')
-    print(f'     attributes: {attributes}')
+    #print(f'     data: {data}')
+    #print(f'     attributes: {attributes}')
     #return
     ## [end simulation]
 
@@ -147,6 +150,8 @@ def publish_to_pubsub(data: bytes, attributes: dict):
         raise ValueError("La variable d'environnement 'GCP_PROJECT' n'est pas définie.")
     print(f'     project_id: {project_id}')
     topic_id = os.environ['pubsub_topic_id']
+    if topic_id is None:
+        raise ValueError("La variable d'environnement 'topic_id' n'est pas définie.")
     print(f'     topic_id: {topic_id}')
     
     # connect to the PubSub client
@@ -156,7 +161,8 @@ def publish_to_pubsub(data: bytes, attributes: dict):
     topic_path = publisher.topic_path(project_id, topic_id)
     future = publisher.publish(topic_path, data, **attributes)
 
-    print(future.result())
+    future.result()  # Bloque jusqu'à ce que le message soit publié
+    print(f"Message publié avec ID : {future.result()}")
     print(f'Published messages with custom attributes to {topic_path}.')
 
 def move_to_invalid_file_folder(bucket_name: str, blob_path: str):
@@ -172,8 +178,8 @@ def move_to_invalid_file_folder(bucket_name: str, blob_path: str):
     ## remove this part when you are ready to deploy your Cloud Function. 
     ## [start simulation]
     print('Your file is considered as invalid. It will be moved to invalid/.')
-    print(f'     bucket_name: {bucket_name}')
-    print(f'     blob_path: {blob_path}')
+    #print(f'     bucket_name: {bucket_name}')
+    #print(f'     blob_path: {blob_path}')
     #return
     ## [end simulation]
         

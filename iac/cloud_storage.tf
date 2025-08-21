@@ -54,18 +54,21 @@ resource "google_storage_bucket" "cloud_functions_sources" {
   uniform_bucket_level_access = true
 }
 
+# load le fichier dans le bucket
 resource "google_storage_bucket_object" "cleaned_store_sql" {
   bucket   = google_storage_bucket.magasin_cie_utils.name
   name = "cleaned_store.sql"
   source = var.cleaned_store_sql
 }
 
+# load le fichier dans le bucket
 resource "google_storage_bucket_object" "raw_store_json" {
   bucket   = google_storage_bucket.magasin_cie_utils.name
   name = "raw_store_json"
   source = var.raw_store_json
 }
 
+# load le fichier dans le bucket
 resource "google_storage_bucket_object" "cleaned_store_json" {
   bucket   = google_storage_bucket.magasin_cie_utils.name
   name = "cleaned_store_json"

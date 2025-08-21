@@ -10,6 +10,10 @@ data "archive_file" "source" {
   type        = "zip"
   source_dir  = "../cloud_functions/cf_trigger_on_file/src_filtered"
   output_path = "../cloud_functions/cf_trigger_on_file/src/function.zip"
+# Dependencies are automatically inferred so these lines can be deleted
+  depends_on = [ 
+    null_resource.filter_dir
+   ]
 }
 
 # Add source code zip to the Cloud Function's bucket
@@ -46,6 +50,8 @@ resource "google_cloudfunctions_function" "function" {
   # Must match the function name in the cloud function `main.py` source code
   entry_point = "check_file_format"
 
+  environment_variables = yamldecode(file("../cloud_functions/cf_trigger_on_file/env.yaml"))
+  
   event_trigger {
     event_type          = "google.storage.object.finalize"
     resource            = "${var.project_id}_magasin_cie_landing"
