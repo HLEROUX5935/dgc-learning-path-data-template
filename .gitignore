@@ -9,3 +9,5 @@ iac/.terraform.lock.hcl
 iac/.terraform/
 iac/init/backend.tfvars
 **/src_filtered/
+basket_20220531.json
+
