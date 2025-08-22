@@ -4,10 +4,15 @@
     - util_bucket_suffix: "magasin-cie-utils"
     - create_disposition: "CREATE_NEVER"
     - write_disposition: "WRITE_TRUNCATE"
+- log_project_id:
+    call: sys.log
+    args:
+      text: ${"Le project_id est " + project_id}
+      severity: "INFO"
 - get_cleaned_store_query:
     call: http.get
     args:
-      url: ${"https://storage.googleapis.com/" + project_id + "_" + util_bucket_suffix + "/queries/cleaned/store.sql"}
+      url: ${"https://storage.googleapis.com/" + project_id + "_" + util_bucket_suffix + "/cleaned_store.sql"}
       headers:
         Content-Type: "text/plain"
       auth:

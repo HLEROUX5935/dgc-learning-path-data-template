@@ -3,9 +3,14 @@ import time
 import json
 import base64
 
+from datetime import datetime
 from google.cloud import storage
 from google.cloud import bigquery
-from google.cloud.workflows import executions_v1
+
+from google.cloud.workflows.executions_v1 import ExecutionsClient
+from google.cloud.workflows.executions_v1.types import Execution
+from google.api_core.exceptions import GoogleAPICallError, RetryError
+import time
 
 
 def receive_messages(event: dict, context: dict):
@@ -20,7 +25,7 @@ def receive_messages(event: dict, context: dict):
          context (google.cloud.functions.Context): Metadata for the event.
     """
 
-    print(f'     ***************                 Start  Receive message   ')
+    print(f'     ***************                 Start  Receive message   : {datetime.now().strftime("%H:%M:%S.%f")[:-4]}')
 
     # rename the variable to be more specific and write it to the logs
     pubsub_event = event
@@ -34,25 +39,35 @@ def receive_messages(event: dict, context: dict):
     # get the blob infos from the attributes
     bucket_name = pubsub_event['attributes']['bucket_name']
     blob_path = pubsub_event['attributes']['blob_path']
+    
+    #     - connect to the Cloud Storage client
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(bucket_name)
+    leblob = bucket.blob(blob_path)
 
-    load_completed = False
-    try:
-        # insert the data into the raw table then archive the file
-        insert_into_raw(table_name, bucket_name, blob_path)
-        move_file(bucket_name, blob_path, 'archive')
-        load_completed = True
+    load_completed = True
+
+    if leblob.exists():
+        load_completed = False
+        try:
+            # insert the data into the raw table then archive the file
+            insert_into_raw(table_name, bucket_name, blob_path)
+            move_file(bucket_name, blob_path, 'archive')
+            load_completed = True
+            
+        except Exception as e:
+            print(e)
+            move_file(bucket_name, blob_path, 'reject')
         
-    except Exception as e:
-        print(e)
-        move_file(bucket_name, blob_path, 'reject')
-        
-    # trigger the pipeline if the load is completed
+    else:
+        print(f'{blob_path} inexistant dans  in {bucket_name} ')
+
+    # trigger the pipeline if the load is completed 
+    # même si pas de fichier pour vider la table 
     if load_completed:
         trigger_worflow(table_name)
 
-
-    print(f'     ***************                 End  Receive message   ')        
-
+    print(f'     ***************                 End  Receive message   : {datetime.now().strftime("%H:%M:%S.%f")[:-4]}')        
 
 def insert_into_raw(table_name: str, bucket_name: str, blob_path: str):
     """
@@ -64,7 +79,7 @@ def insert_into_raw(table_name: str, bucket_name: str, blob_path: str):
          blob_path (str): Path of the blob inside the bucket.
     """
 
-    print(f'     ***************              Start  insert_into_raw   ')
+    print(f'     ***************              Start  insert_into_raw   : {datetime.now().strftime("%H:%M:%S.%f")[:-4]}')
 
     # TODO: 2
     # You have to try to insert the file into the correct raw table using the python BigQuery Library. 
@@ -88,76 +103,124 @@ def insert_into_raw(table_name: str, bucket_name: str, blob_path: str):
     #     - store in a string variable the blob uri path of the data to load (gs://your-bucket/your/path/to/data)
     blob_uri_path = f'gs://{bucket_name}/{blob_path}'
     #gs://vast-verve-469412-c5_magasin_cie_landing/input\store_20220531.csv
+    bucket = storage_client.bucket(bucket_name)
+    leblob = bucket.blob(blob_path)
+    if leblob.exists():
 
-    #     - connect to the BigQuery Client
-    bigquery_client = bigquery.Client()  
+        #     - connect to the BigQuery Client
+        bigquery_client = bigquery.Client()  
 
-    #     - store in a string variable the table id with the bigquery client. (project_id.dataset_id.table_name)
-    table_id = f'{project}.raw.{table_name}'    
+        #     - store in a string variable the table id with the bigquery client. (project_id.dataset_id.table_name)
+        table_id = f'{project}.raw.{table_name}'    
 
-    #     - create your LoadJobConfig object from the BigQuery librairy
-    #     - (maybe you will need more variables according to the type of the file - csv, json - so it can be good to see the documentation)
+        #     - create your LoadJobConfig object from the BigQuery librairy
+        #     - (maybe you will need more variables according to the type of the file - csv, json - so it can be good to see the documentation)
 
-    *_, extension = blob_path.split('.')
-    if extension.lower() == 'csv':
-        load_job_config = bigquery.LoadJobConfig(
-            schema=raw_schema_json,
-            source_format=bigquery.SourceFormat.CSV,
-            skip_leading_rows=1,
+        *_, extension = blob_path.split('.')
+        if extension.lower() == 'csv':
+            load_job_config = bigquery.LoadJobConfig(
+                schema=raw_schema_json,
+                source_format=bigquery.SourceFormat.CSV,
+                skip_leading_rows=1,
+            )
+
+        elif extension.lower() == 'json':
+            load_job_config = bigquery.LoadJobConfig(
+                schema=raw_schema_json,
+                source_format=bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
+            )
+        else:
+            raise NotImplementedError(f'Extension {extension} not supported')
+
+        #run your loading job from the blob uri to the destination raw table
+        print(f'         load_table_from_uri  ')
+        load_job = bigquery_client.load_table_from_uri(
+            source_uris=blob_uri_path,
+            destination=table_id,
+            job_config=load_job_config,
         )
 
-    elif extension.lower() == 'json':
-        load_job_config = bigquery.LoadJobConfig(
-            schema=raw_schema_json,
-            source_format=bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
-        )
+        #waits the job to finish and print the number of rows inserted
+        load_job.result()
+
+        nb_rows_table = bigquery_client.get_table(table_id).num_rows
+
+        print(f'{nb_rows_table} rows in {table_id} ')
     else:
-        raise NotImplementedError(f'Extension {extension} not supported')
-
-    #run your loading job from the blob uri to the destination raw table
-    print(f'         load_table_from_uri  ')
-    load_job = bigquery_client.load_table_from_uri(
-        source_uris=blob_uri_path,
-        destination=table_id,
-        job_config=load_job_config,
-    )
-
-    #waits the job to finish and print the number of rows inserted
-    load_job.result()
-
-    nb_rows_table = bigquery_client.get_table(table_id).num_rows
-
-    print(f'{nb_rows_table} rows inserted ')
+        print(f'{blob_path} inexistant dans  in {bucket_name} ')
     
-    print(f'     ***************              End  insert_into_raw   ')
+    print(f'     ***************              End  insert_into_raw   : {datetime.now().strftime("%H:%M:%S.%f")[:-4]}')
 
-   
+def trigger_workflow_for_a_table(project_id, location, workflow_id, arguments=None):
+    client = ExecutionsClient()
+    parent = f"projects/{project_id}/locations/{location}/workflows/{workflow_id}"
+
+    print(f"[INFO] Déclenchement du workflow '{workflow_id}'")
+    print(f"[INFO] parent : {parent}")
+
+    try:
+        # Crée une exécution
+        execution = Execution(argument=arguments if arguments else "{}")
+        response = client.create_execution(request={"parent": parent, "execution": execution})
+        execution_id = response.name.split("/")[-1]
+        print(f"[SUCCESS] Exécution déclenchée. ID : {execution_id}")
+        return execution_id
+    except GoogleAPICallError as e:
+        print(f"[ERROR] Impossible de déclencher le workflow : {e}")
+        return None
+
+def wait_for_execution_completion(project_id, location, workflow_id, execution_id, timeout=300):
+    client = ExecutionsClient()
+    execution_name = f"projects/{project_id}/locations/{location}/workflows/{workflow_id}/executions/{execution_id}"
+
+    start_time = time.time()
+    while True:
+        try:
+            response = client.get_execution(request={"name": execution_name})
+            state = response.state.name  # ex: "ACTIVE", "SUCCEEDED", "FAILED"
+            print(f"[INFO]  statut : {state}  : {datetime.now().strftime("%H:%M:%S.%f")[:-4]} ")
+
+            if state not in ["ACTIVE"]:
+                print(f"[INFO] Exécution terminée avec le statut : {state}")
+                if state == "SUCCEEDED":
+                    print(f"[RESULT] {response.result}")
+                elif state == "FAILED":
+                    print(f"[ERROR] {response.error}")
+                return state
+
+            if time.time() - start_time > timeout:
+                print(f"[ERROR] Timeout atteint après {timeout} secondes.")
+                return None
+
+            print(f"[INFO] Exécution en cours... (statut : {state}), on attend 5s")
+            time.sleep(5)
+
+        except (GoogleAPICallError, RetryError) as e:
+            print(f"[ERROR] Impossible de vérifier le statut de l'exécution : {e}")
+            return None
+
 def trigger_worflow(table_name: str):
-    """
-    Triggers and waits for a `<table_name>_wkf` Workflows pipeline's result within the project ID.
-    
-    Args:
-         table_name (str): BigQuery raw table name.
-    """
-    print(f'     ***************              Start  trigger_worflow   ')
-    
+    print(f'     ***************   Start  trigger_worflow   : {datetime.now().strftime("%H:%M:%S.%f")[:-4]}')
 
-    # TODO: 3
-    # This is your final function to implement. 
-    # At this time, I hope you are more confortable with the Google Documentations for Python libraries. 
-    # So your are not guide except this little help:
-    #     - trigger a Cloud Workflows execution according to the table updated
-    #     - wait for the result (with exponential backoff delay will be better)
-    #     - be verbose where you think you have to 
-    
+    project_id = os.environ.get('GCP_PROJECT')
+    if project_id is None:
+        raise ValueError("La variable d'environnement 'GCP_PROJECT' n'est pas définie.")
+    print(f'     project_id: {project_id}')
 
+    location = os.environ.get('wkf_location')
+    if location is None:
+        location = 'europe-west1'
+        print(f'On force la variable  "location" a "europe-west1"')
+        #raise ValueError("La variable d'environnement 'wkf_location' n'est pas définie.")
 
+    workflow_id = f'{table_name}_wkf'
+    arguments = "{}"  # JSON string si besoin
 
-    print(f'     ***************              End    trigger_worflow   ')
+    execution_id = trigger_workflow_for_a_table(project_id, location, workflow_id, arguments)
+    if execution_id:
+        wait_for_execution_completion(project_id, location, workflow_id, execution_id)
 
-    raise NotImplementedError()
-
-
+    print(f'     ***************   End  trigger_worflow   : {datetime.now().strftime("%H:%M:%S.%f")[:-4]}')
 
 def move_file(bucket_name, blob_path, new_subfolder):
     """
@@ -168,7 +231,7 @@ def move_file(bucket_name, blob_path, new_subfolder):
          blob_path (str): Path of the blob inside the bucket.
          new_subfolder (str): Subfolder where to move the file.
     """
-    print(f'               ***   move_file   ')
+    print(f'     ***************   Start move_file   : {datetime.now().strftime("%H:%M:%S.%f")[:-4]}')
     
     
     print(f'     bucket_name: {bucket_name}')
@@ -200,7 +263,7 @@ def move_file(bucket_name, blob_path, new_subfolder):
     #     - move you file inside the bucket to its destination
     #     - print the actual move you made
 
-
+    print(f'     ***************   End   move_file   : {datetime.now().strftime("%H:%M:%S.%f")[:-4]}')
 
 if __name__ == '__main__':
 
@@ -212,9 +275,11 @@ if __name__ == '__main__':
 
     # Données à publier en bytes
     data = b'store'
+    print(data)
 
     # Encodage en Base64
     encoded_data = base64.b64encode(data).decode('utf-8')
+    print(encoded_data)
 
     # test your Cloud Function for the store file.
     mock_event = {
@@ -226,4 +291,6 @@ if __name__ == '__main__':
     }
 
     mock_context = {}
-    receive_messages(mock_event, mock_context)
+    #receive_messages(mock_event, mock_context)
+
+    trigger_worflow('store')

@@ -4,22 +4,24 @@ variable "project_id" {
    default = "vast-verve-469412-c5"
 }
 
-variable "location"{
-  description = "GCP location"
-  type = string
-  default = "EU"
-}
-
 variable "pubsub_topic_id"{
   description = "GCP location"
   type = string
   default = "valid_file"
 }
 
+#Pour Workflows, il faut toujours une région spécifique (ex. europe-west1).
+#Pour BigQuery et Cloud Storage, tu peux avoir une multi-région (EU, US) ou une région (europe-west1).
 variable "region"{
   description = "GCP region"
   type = string
   default = "europe-west1"
+}
+
+variable "location"{
+  description = "GCP location"
+  type = string
+  default = "EU"
 }
 
 

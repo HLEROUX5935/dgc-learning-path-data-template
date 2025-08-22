@@ -76,3 +76,8 @@ resource "google_storage_bucket_object" "cleaned_store_json" {
 }
 
 
+resource "google_storage_bucket_iam_member" "workflow_storage_access" {
+  bucket = google_storage_bucket.magasin_cie_utils.name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${google_service_account.workflows_service_account.email}"
+}

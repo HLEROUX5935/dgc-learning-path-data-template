@@ -65,7 +65,7 @@ def check_file_format(event: dict, context: dict):
 
     # rename the variable to be more specific and write it to the logs
     blob_event = event
-    print(f'     ***************                 Start Processing blob: {blob_event["name"]}.')
+    print(f'     ***************                 Start Processing blob: {blob_event["name"]}   : {datetime.now().strftime("%H:%M:%S.%f")[:-4]}')
 
     # get the bucket name and the blob path
     bucket_name = blob_event['bucket']
@@ -119,7 +119,7 @@ def check_file_format(event: dict, context: dict):
         # the file is moved to the invalid/ folder if one check is failed
         move_to_invalid_file_folder(bucket_name, blob_path)
 
-    print(f'     ***************                 End   Processing blob: {blob_event["name"]}.')    
+    print(f'     ***************                 End   Processing blob: {blob_event["name"]}   : {datetime.now().strftime("%H:%M:%S.%f")[:-4]}')    
 
 
 
