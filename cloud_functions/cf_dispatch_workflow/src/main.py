@@ -291,6 +291,4 @@ if __name__ == '__main__':
     }
 
     mock_context = {}
-    #receive_messages(mock_event, mock_context)
-
-    trigger_worflow('store')
+    receive_messages(mock_event, mock_context)
